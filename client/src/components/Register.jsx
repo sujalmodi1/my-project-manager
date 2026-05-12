@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import axios from 'axios';
+import api from '../services/api';
 
 const Register = ({ onSwitch }) => {
     const [formData, setFormData] = useState({ username: '', email: '', password: '' });
@@ -7,7 +8,7 @@ const Register = ({ onSwitch }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            await axios.post('/api/auth/register', formData);
+            await api.post('/api/auth/register', formData);
             alert("Registration successful! You can now log in.");
             onSwitch(); // Take the user back to the login screen
         } catch (err) {
