@@ -14,7 +14,7 @@ const Dashboard = () => {
     const fetchProjects = async () => {
         try {
             const API_URL = import.meta.env.VITE_API_URL;
-            const res = await axios.post(`${API_URL}/api/projects`, projectData, {
+            const res = await axios.get(`${API_URL}/api/projects`, {
                 headers: { Authorization: `Bearer ${token}` } // Don't forget the token!
             });
             setProjects(res.data);
