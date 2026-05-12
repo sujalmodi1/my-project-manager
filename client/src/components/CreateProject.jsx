@@ -1,6 +1,6 @@
 import { toast } from 'react-hot-toast';
 import { useState } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 
 const CreateProject = ({ onProjectCreated }) => {
     const [isLoading, setIsLoading] = useState(false);
@@ -12,10 +12,7 @@ const CreateProject = ({ onProjectCreated }) => {
         setIsLoading(true);
         e.preventDefault();
         try {
-            await axios.post('/api/projects',
-                { title, description },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
+            await api.post('/api/projects', { title, description });
 
             setTitle('');
             setDescription('');
