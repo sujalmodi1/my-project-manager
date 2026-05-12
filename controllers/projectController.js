@@ -1,23 +1,24 @@
 const pool = require('../db');
 
-// 1. Create Project (and auto-assign Admin role)
+// 1. Create Project (Transaction ensures both table entries are created or none)
 exports.createProject = async (req, res) => {
     const { title, description } = req.body;
     const userId = req.user.id;
+
     try {
-        // Start a transaction to ensure both inserts succeed
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
             
-            // Insert the project
+            // Insert the project into the main projects table
             const newProject = await client.query(
                 'INSERT INTO projects (title, description, owner_id) VALUES ($1, $2, $3) RETURNING *',
                 [title, description, userId]
             );
             const projectId = newProject.rows[0].id;
 
-            // RBAC: Automatically make creator the Admin in project_members
+            // Automatically link the creator as the 'Admin' in the members table
+            // This ensures the project appears in the GET list immediately
             await client.query(
                 'INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, $3)',
                 [projectId, userId, 'Admin']
@@ -32,12 +33,12 @@ exports.createProject = async (req, res) => {
             client.release();
         }
     } catch (err) {
-        console.error(err.message);
+        console.error("Create Project Error:", err.message);
         res.status(500).send('Server Error');
     }
 };
 
-// 2. Get Projects (Fetch all projects where user is a Member or Admin)
+// 2. Get Projects (Uses a JOIN to prove many-to-many relationship)
 exports.getProjects = async (req, res) => {
     try {
         const projects = await pool.query(
@@ -50,18 +51,18 @@ exports.getProjects = async (req, res) => {
         );
         res.json(projects.rows);
     } catch (err) {
-        console.error(err.message);
+        console.error("Get Projects Error:", err.message);
         res.status(500).send('Server Error');
     }
 };
 
-// 3. Invite Member (The RBAC/Team logic)
+// 3. Invite Member (RBAC: Only Admins can invite)
 exports.inviteMember = async (req, res) => {
     const { projectId, usernameToInvite, role } = req.body;
     const senderId = req.user.id;
 
     try {
-        // Check if the sender is an Admin of this specific project
+        // Verify sender is an Admin of this project
         const senderCheck = await pool.query(
             "SELECT role FROM project_members WHERE project_id = $1 AND user_id = $2",
             [projectId, senderId]
@@ -71,13 +72,11 @@ exports.inviteMember = async (req, res) => {
             return res.status(403).json({ message: "Only project Admins can invite members" });
         }
 
-        // Find the user to invite
         const userFound = await pool.query("SELECT id FROM users WHERE username = $1", [usernameToInvite]);
         if (userFound.rows.length === 0) return res.status(404).json({ message: "User not found" });
 
         const invitedId = userFound.rows[0].id;
 
-        // Add to project_members
         await pool.query(
             "INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
             [projectId, invitedId, role || 'Member']
@@ -85,12 +84,12 @@ exports.inviteMember = async (req, res) => {
 
         res.json({ message: "Member invited successfully" });
     } catch (err) {
-        console.error(err.message);
+        console.error("Invite Error:", err.message);
         res.status(500).send('Server Error');
     }
 };
 
-// 4. Update Project (Restricted to Admins)
+// 4. Update Project (Restricted to Admins via Subquery)
 exports.updateProject = async (req, res) => {
     const { id } = req.params;
     const { title, description } = req.body;
